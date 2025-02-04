@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: healthcare-voice-agent
+    env: node
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RETELL_API_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false 
