@@ -138,7 +138,7 @@ function extractPatientData(callData) {
 
     const patientData = new PatientData();
     
-    // Basic call details
+    // Basic call details (always available)
     patientData.callDetails = {
         callId: callData.call_id,
         timestamp: callData.start_timestamp,
@@ -147,108 +147,92 @@ function extractPatientData(callData) {
 
     // Extract from call analysis
     if (callData.call_analysis) {
+        // Store the raw analysis data
         patientData.analysis = {
-            summary: callData.call_analysis.call_summary,
-            sentiment: callData.call_analysis.user_sentiment,
-            successful: callData.call_analysis.call_successful,
+            summary: callData.call_analysis.call_summary || '',
+            sentiment: callData.call_analysis.user_sentiment || 'Unknown',
+            successful: callData.call_analysis.call_successful || false,
             customData: callData.call_analysis.custom_analysis_data || {}
         };
 
         // Extract custom analysis data
         const customData = callData.call_analysis.custom_analysis_data || {};
         
-        // Consultation details
-        patientData.consultation.reasonForCall = customData.reason_for_call;
-        patientData.consultation.minorAilment = customData.minor_ailment;
-
-        // Personal information
+        // Store any data we get, even if incomplete
         patientData.personalInfo = {
-            firstName: customData.first_name,
-            lastName: customData.last_name,
-            phoneNumber: callData.from_number, // From call data
-            email: customData.email,
-            address: customData.address,
-            city: customData.city
+            firstName: customData.first_name || '',
+            lastName: customData.last_name || '',
+            phoneNumber: callData.from_number || '', // From call data
+            email: customData.email || '',
+            address: customData.address || '',
+            city: customData.city || ''  // This should now be captured
         };
 
-        // If primary condition is in custom data, use it
-        if (customData.primary_condition) {
-            patientData.symptoms.primaryCondition = customData.primary_condition;
-        }
+        // Store consultation info if available
+        patientData.consultation = {
+            reasonForCall: customData.reason_for_call || 'Incomplete call',
+            minorAilment: customData.minor_ailment || ''
+        };
     }
 
-    // Extract from transcript (Retell provides both string and object formats)
+    // Process transcript for any mentioned symptoms
     if (callData.transcript) {
-        // Process the full transcript string
-        const transcript = callData.transcript;
-        const userLines = transcript
-            .split('\n')
-            .filter(line => line.toLowerCase().startsWith('user:'))
-            .map(line => line.replace(/^user:\s*/i, '').toLowerCase());
+        const transcript = callData.transcript.toLowerCase();
+        
+        // Extract symptoms even from partial conversations
+        const symptomKeywords = {
+            'acne': 'Acne',
+            'pimple': 'Acne',
+            'breakout': 'Acne',
+            'headache': 'Headache',
+            'migraine': 'Migraine',
+            'pain': 'Pain',
+            'nausea': 'Nausea',
+            'dizzy': 'Dizziness',
+            'vomiting': 'Vomiting'
+        };
 
-        console.log('Processing user lines:', userLines);
-
-        for (const line of userLines) {
-            // Extract severity (e.g., "8 out of 10")
-            const severityMatch = line.match(/(\d+)(?:\s+)?(?:out\s+of|\/)\s*10/);
-            if (severityMatch && !patientData.symptoms.severity) {
-                patientData.symptoms.severity = parseInt(severityMatch[1]);
-            }
-
-            // Extract duration (e.g., "3 months")
-            const durationMatch = line.match(/(\d+)\s*(day|days|week|weeks|month|months)/);
-            if (durationMatch && !patientData.symptoms.duration) {
-                patientData.symptoms.duration = `${durationMatch[1]} ${durationMatch[2]}`;
-            }
-
-            // Extract symptoms
-            const symptomKeywords = ['acne', 'headache', 'pain', 'nausea', 'dizzy', 'vomiting'];
-            for (const keyword of symptomKeywords) {
-                if (line.includes(keyword) && !patientData.symptoms.additionalSymptoms.includes(keyword)) {
-                    patientData.symptoms.additionalSymptoms.push(keyword);
-                    if (!patientData.symptoms.primaryCondition) {
-                        patientData.symptoms.primaryCondition = keyword;
-                    }
+        for (const [keyword, formalName] of Object.entries(symptomKeywords)) {
+            if (transcript.includes(keyword)) {
+                patientData.symptoms.additionalSymptoms.push(formalName);
+                // Use first mentioned symptom as primary if none set
+                if (!patientData.symptoms.primaryCondition) {
+                    patientData.symptoms.primaryCondition = formalName;
                 }
             }
+        }
 
-            // Extract location
-            const locationKeywords = {
-                'back of head': 'posterior head',
-                'front of head': 'anterior head',
-                'side of head': 'lateral head',
-                'face': 'facial',
-                'chest': 'chest',
-                'back': 'back'
-            };
-            for (const [keyword, medical] of Object.entries(locationKeywords)) {
-                if (line.includes(keyword)) {
-                    patientData.symptoms.location = medical;
-                    break;
-                }
+        // Extract any mentioned locations
+        const locationKeywords = {
+            'face': 'Face',
+            'forehead': 'Forehead',
+            'cheek': 'Cheeks',
+            'chin': 'Chin',
+            'back': 'Back',
+            'chest': 'Chest'
+        };
+
+        for (const [keyword, location] of Object.entries(locationKeywords)) {
+            if (transcript.includes(keyword)) {
+                patientData.symptoms.location = location;
+                break;
             }
         }
     }
 
+    // Log what we managed to extract
     console.log('Extracted data:', {
         callId: patientData.callDetails.callId,
         personalInfo: {
-            name: `${patientData.personalInfo.firstName} ${patientData.personalInfo.lastName}`,
-            city: patientData.personalInfo.city
-        },
-        consultation: {
-            reason: patientData.consultation.reasonForCall,
-            ailment: patientData.consultation.minorAilment
+            city: patientData.personalInfo.city || 'Not provided',
+            phone: patientData.personalInfo.phoneNumber || 'Not provided'
         },
         symptoms: {
-            condition: patientData.symptoms.primaryCondition,
-            severity: patientData.symptoms.severity,
-            duration: patientData.symptoms.duration,
-            location: patientData.symptoms.location,
+            primary: patientData.symptoms.primaryCondition || 'Not identified',
+            location: patientData.symptoms.location || 'Not specified',
             additional: patientData.symptoms.additionalSymptoms
         },
-        sentiment: patientData.analysis?.sentiment,
-        success: patientData.analysis?.successful
+        callComplete: patientData.analysis?.successful || false
     });
 
     return patientData;
