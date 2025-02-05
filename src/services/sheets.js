@@ -54,32 +54,24 @@ class GoogleSheetsService {
     }
 
     async initializeHeaders() {
+        // Only the fields we want from custom data
         const headers = [
             'Timestamp',
             'Call ID',
-            'Phone Number',
             'Reason for Call',
             'Minor Ailment',
-            'Primary Condition',
-            'Severity',
-            'Duration',
-            'Location',
-            'Additional Symptoms',
             'First Name',
             'Last Name',
             'Address',
+            'Phone',
             'Email',
-            'City',
-            'Sentiment',
-            'Success',
-            'Summary',
-            'Custom Data'
+            'City'
         ];
 
         try {
             await this.sheets.spreadsheets.values.update({
                 spreadsheetId: this.spreadsheetId,
-                range: 'A1:S1',
+                range: 'A1:J1',  // Updated range to match new columns
                 valueInputOption: 'RAW',
                 resource: {
                     values: [headers]

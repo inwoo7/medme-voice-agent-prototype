@@ -253,34 +253,23 @@ function extractPatientData(callData) {
 
 async function storePatientData(patientData) {
     try {
-        console.log('Preparing to store data:', {
-            callId: patientData.callDetails.callId,
-            timestamp: new Date(patientData.callDetails.timestamp).toISOString()
-        });
-
+        // Get the raw custom data
+        const customData = patientData.analysis.customData;
+        
         const dataToStore = [
             new Date(patientData.callDetails.timestamp).toISOString(),  // Timestamp
             patientData.callDetails.callId,                            // Call ID
-            patientData.personalInfo.phoneNumber || '',                // Phone Number
-            patientData.consultation.reasonForCall || '',              // Reason for Call
-            patientData.consultation.minorAilment || '',              // Minor Ailment
-            patientData.symptoms.primaryCondition || '',               // Primary Condition
-            patientData.symptoms.severity || '',                       // Severity
-            patientData.symptoms.duration || '',                       // Duration
-            patientData.symptoms.location || '',                       // Location
-            patientData.symptoms.additionalSymptoms.join(', ') || '', // Additional Symptoms
-            patientData.personalInfo.firstName || '',                  // First Name
-            patientData.personalInfo.lastName || '',                   // Last Name
-            patientData.personalInfo.address || '',                    // Address
-            patientData.personalInfo.email || '',                      // Email
-            patientData.personalInfo.city || '',                      // City
-            patientData.analysis?.sentiment || '',                     // Sentiment
-            patientData.analysis?.successful || '',                    // Success
-            patientData.analysis?.summary || '',                      // Summary
-            JSON.stringify(patientData.analysis?.customData || {})     // Custom Data
+            customData['_reason for call'] || '',                      // Reason for Call
+            customData['_minor _ailment'] || '',                       // Minor Ailment
+            customData['_first _name'] || '',                          // First Name
+            customData['_last _name'] || '',                          // Last Name
+            customData['_address'] || '',                             // Address
+            customData['_phone'] || '',                               // Phone
+            customData['_email'] || '',                               // Email
+            customData['_city'] || ''                                 // City
         ];
 
-        console.log('Storing row data:', dataToStore);
+        console.log('Storing custom data:', dataToStore);
         await sheetsService.appendPatientData(dataToStore);
         console.log('Successfully stored data in Google Sheets');
     } catch (error) {
