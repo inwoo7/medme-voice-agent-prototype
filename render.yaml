@@ -10,4 +10,6 @@ services:
       - key: RETELL_API_KEY
         sync: false
       - key: WEBHOOK_SECRET
-        sync: false 
+        sync: false
+      - key: PORT
+        value: "10000"    # Render requires a specific port 
