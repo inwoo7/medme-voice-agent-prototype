@@ -2,9 +2,40 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 
-// Temporarily disable verification for testing
+// Re-enable webhook verification with logging
 const verifyWebhook = (req, res, next) => {
-    next(); // Bypass verification
+    const signature = req.headers['x-retell-signature'];
+    const timestamp = req.headers['x-retell-timestamp'];
+    
+    console.log('Verifying webhook:', {
+        receivedSignature: signature,
+        timestamp: timestamp,
+        headers: req.headers
+    });
+    
+    if (!signature || !timestamp) {
+        console.log('Missing headers:', { signature, timestamp });
+        return res.status(401).json({ error: 'Missing signature headers' });
+    }
+
+    const payload = JSON.stringify(req.body);
+    const expectedSignature = crypto
+        .createHmac('sha256', process.env.WEBHOOK_SECRET)
+        .update(timestamp + payload)
+        .digest('hex');
+    
+    console.log('Signature check:', {
+        expected: expectedSignature,
+        received: signature
+    });
+
+    if (signature !== expectedSignature) {
+        console.log('Invalid signature');
+        return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    console.log('Webhook verified successfully');
+    next();
 };
 
 // Basic webhook handler for agent interactions
