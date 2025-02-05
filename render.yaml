@@ -14,4 +14,8 @@ services:
       - key: RETELL_API_KEY
         sync: false
       - key: WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SHEETS_CREDENTIALS
         sync: false 

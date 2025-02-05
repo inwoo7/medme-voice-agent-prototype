@@ -13,10 +13,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "express": "^4.17.1",
     "body-parser": "^1.19.0",
-    "retell-sdk": "^3.4.0",
-    "dotenv": "^10.0.0"
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^144.0.0",
+    "retell-sdk": "^3.4.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.15"

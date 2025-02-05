@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const PatientData = require('./models/PatientData');
+const sheetsService = require('./services/sheets');
 
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
@@ -73,6 +74,9 @@ const verifyWebhook = (req, res, next) => {
 // At the top of the file
 console.log('Webhook router loaded');
 
+// Initialize sheets service when the server starts
+sheetsService.init().catch(console.error);
+
 // Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
     console.log('Received webhook request:', {
@@ -104,6 +108,7 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                         summary: callData?.call_analysis?.call_summary,
                         sentiment: callData?.call_analysis?.user_sentiment,
                         success: callData?.call_analysis?.call_successful,
+                        customData: callData?.call_analysis?.custom_analysis_data,
                         extractedData: patientData.toJSON()
                     });
 
@@ -226,25 +231,24 @@ function extractPatientData(callData) {
         patientData.symptoms.primaryCondition = patientData.symptoms.additionalSymptoms[0];
     }
 
+    // Extract analysis data
+    if (callData.call_analysis) {
+        patientData.analysis = {
+            summary: callData.call_analysis.call_summary,
+            sentiment: callData.call_analysis.user_sentiment,
+            successful: callData.call_analysis.call_successful,
+            customData: callData.call_analysis.custom_analysis_data || {},
+            taskCompletion: callData.call_analysis.agent_task_completion_rating
+        };
+    }
+
     return patientData;
 }
 
 async function storePatientData(patientData) {
-    // This is a placeholder - implement your storage solution
-    // Could be MongoDB, PostgreSQL, or even just write to a file
-    console.log('Storing patient data:', patientData.toJSON());
-    
-    // Example: Store to a file
-    const fs = require('fs').promises;
-    const path = require('path');
-    
-    const dataDir = path.join(__dirname, '../data');
-    const filePath = path.join(dataDir, `${patientData.callDetails.callId}.json`);
-    
     try {
-        await fs.mkdir(dataDir, { recursive: true });
-        await fs.writeFile(filePath, JSON.stringify(patientData.toJSON(), null, 2));
-        console.log(`Patient data stored at: ${filePath}`);
+        await sheetsService.appendPatientData(patientData);
+        console.log('Patient data stored in Google Sheets');
     } catch (error) {
         console.error('Error storing patient data:', error);
     }
