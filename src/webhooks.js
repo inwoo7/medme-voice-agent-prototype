@@ -2,15 +2,16 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 
-// Re-enable webhook verification with logging
+// Re-enable webhook verification with detailed logging
 const verifyWebhook = (req, res, next) => {
     const signature = req.headers['x-retell-signature'];
     const timestamp = req.headers['x-retell-timestamp'];
     
-    console.log('Verifying webhook:', {
-        receivedSignature: signature,
+    console.log('Incoming request:', {
+        body: req.body,
+        headers: req.headers,
         timestamp: timestamp,
-        headers: req.headers
+        signature: signature
     });
     
     if (!signature || !timestamp) {
@@ -19,19 +20,31 @@ const verifyWebhook = (req, res, next) => {
     }
 
     const payload = JSON.stringify(req.body);
+    console.log('Payload for signature:', payload);
+    console.log('Timestamp + Payload:', timestamp + payload);
+
     const expectedSignature = crypto
         .createHmac('sha256', process.env.WEBHOOK_SECRET)
         .update(timestamp + payload)
         .digest('hex');
     
-    console.log('Signature check:', {
+    console.log('Signature comparison:', {
         expected: expectedSignature,
-        received: signature
+        received: signature,
+        match: expectedSignature === signature
     });
 
     if (signature !== expectedSignature) {
         console.log('Invalid signature');
-        return res.status(401).json({ error: 'Invalid signature' });
+        return res.status(401).json({ 
+            error: 'Invalid signature',
+            debug: {
+                expected: expectedSignature,
+                received: signature,
+                timestamp: timestamp,
+                payloadUsed: payload
+            }
+        });
     }
 
     console.log('Webhook verified successfully');
