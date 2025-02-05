@@ -11,11 +11,9 @@ services:
         value: 10000
       - key: ENABLE_DATA_STORAGE
         value: "true"
-      - key: RETELL_API_KEY
+      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+        value: "1ntiLdxQNFQDNqMCxyijxw6MCwEmnQX9HiOp7j1u57lI"
+      - key: GOOGLE_SHEETS_CREDENTIALS
         sync: false
       - key: WEBHOOK_SECRET
-        sync: false
-      - key: GOOGLE_SHEETS_SPREADSHEET_ID
-        sync: false
-      - key: GOOGLE_SHEETS_CREDENTIALS
         sync: false 
