@@ -85,11 +85,25 @@ class GoogleSheetsService {
 
     async appendPatientData(dataToStore) {
         try {
-            console.log('Attempting to append data to sheets:', dataToStore);
-            
-            await this.sheets.spreadsheets.values.append({
+            if (!this.sheets) {
+                console.error('Sheets client not initialized');
+                throw new Error('Sheets client not initialized');
+            }
+
+            if (!this.spreadsheetId) {
+                console.error('Spreadsheet ID not configured');
+                throw new Error('Spreadsheet ID not configured');
+            }
+
+            console.log('Attempting to append data to sheets:', {
                 spreadsheetId: this.spreadsheetId,
-                range: 'A2:S2',  // Updated to match new column count
+                dataLength: dataToStore.length,
+                data: dataToStore
+            });
+            
+            const response = await this.sheets.spreadsheets.values.append({
+                spreadsheetId: this.spreadsheetId,
+                range: 'A2:J2',  // Updated to match new column count
                 valueInputOption: 'RAW',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
@@ -97,13 +111,21 @@ class GoogleSheetsService {
                 }
             });
 
+            console.log('Sheets API Response:', {
+                status: response.status,
+                statusText: response.statusText,
+                data: response.data
+            });
+
             console.log('Successfully appended data to Google Sheets');
+            return response;
         } catch (error) {
             console.error('Failed to append data:', error);
             console.error('Error details:', {
                 message: error.message,
                 code: error.code,
-                status: error.status
+                status: error.status,
+                stack: error.stack
             });
             throw error;
         }

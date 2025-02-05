@@ -66,17 +66,19 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                     
                     const patientData = extractPatientData(callData);
                     
-                    if (process.env.ENABLE_DATA_STORAGE === 'true') {
+                    // Check if data storage is enabled (more lenient check)
+                    if (process.env.ENABLE_DATA_STORAGE !== "false") {
                         console.log('Attempting to store data...');
                         try {
                             await storePatientData(patientData);
                             console.log('Successfully stored data in Google Sheets');
                         } catch (error) {
-                            console.error('Failed to store data:', error);
+                            console.error('Failed to store data:', error.message);
+                            console.error('Error stack:', error.stack);
                             // Continue processing even if storage fails
                         }
                     } else {
-                        console.log('Data storage is disabled (ENABLE_DATA_STORAGE != true)');
+                        console.log('Data storage is explicitly disabled');
                     }
                     break;
                     
