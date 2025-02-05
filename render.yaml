@@ -1,15 +1,17 @@
 services:
   - type: web
-    name: healthcare-voice-agent
+    name: medme-voice-agent-prototype
     env: node
     buildCommand: npm install
     startCommand: node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
+      - key: ENABLE_DATA_STORAGE
+        value: true
       - key: RETELL_API_KEY
         sync: false
       - key: WEBHOOK_SECRET
-        sync: false
-      - key: PORT
-        value: "10000"    # Render requires a specific port 
+        sync: false 

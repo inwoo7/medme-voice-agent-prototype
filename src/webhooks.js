@@ -70,8 +70,18 @@ const verifyWebhook = (req, res, next) => {
     next();
 };
 
+// At the top of the file
+console.log('Webhook router loaded');
+
 // Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
+    console.log('Received webhook request:', {
+        url: req.url,
+        method: req.method,
+        headers: req.headers,
+        body: req.body ? JSON.stringify(req.body).slice(0, 500) + '...' : null
+    });
+
     try {
         // Handle Retell call events
         if (req.body.event) {
@@ -144,7 +154,10 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
         console.log(`Processed intent: ${intent} for call ${call_id}`);
         res.json(response);
     } catch (error) {
-        console.error('Webhook error:', error);
+        console.error('Webhook error:', {
+            message: error.message,
+            stack: error.stack
+        });
         res.status(500).json({
             error: 'Internal server error',
             details: error.message

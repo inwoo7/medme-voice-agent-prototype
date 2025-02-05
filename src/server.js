@@ -28,6 +28,15 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: 'healthy' });
 });
 
+// Add this after the health check route
+app.get('/webhooks/test', (req, res) => {
+    console.log('Test endpoint hit');
+    res.json({ 
+        status: 'webhook endpoint responding',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Routes
 app.use('/webhooks', webhookRouter);
 
