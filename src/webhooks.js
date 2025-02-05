@@ -268,7 +268,15 @@ async function storePatientData(patientData) {
             customData['_address'] || '',                             // Address
             customData['_phone'] || '',                               // Phone
             customData['_email'] || '',                               // Email
-            customData['_city'] || ''                                 // City
+            customData['_city'] || '',                                // City
+            customData['_postal_code'] || '',                         // Postal Code
+            customData['_date_of_birth'] || '',                       // Date of Birth
+            customData['_emergency_contact_name'] || '',              // Emergency Contact Name
+            customData['_emergency_contact_phone'] || '',             // Emergency Contact Phone
+            customData['_msp_number'] || '',                          // MSP Number
+            customData['_appointment_datetime'] || '',                // Appointment Date Time
+            customData['_consent'] || '',                            // Consent
+            customData['_appointment_booked'] || ''                   // Appointment Booked
         ];
 
         console.log('Storing custom data:', dataToStore);

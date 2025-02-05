@@ -65,13 +65,21 @@ class GoogleSheetsService {
             'Address',
             'Phone',
             'Email',
-            'City'
+            'City',
+            'Postal Code',
+            'Date of Birth',
+            'Emergency Contact Name',
+            'Emergency Contact Phone',
+            'MSP Number',
+            'Appointment Date Time',
+            'Consent',
+            'Appointment Booked'
         ];
 
         try {
             await this.sheets.spreadsheets.values.update({
                 spreadsheetId: this.spreadsheetId,
-                range: 'A1:J1',  // Updated range to match new columns
+                range: 'A1:R1',  // Updated range to match new columns
                 valueInputOption: 'RAW',
                 resource: {
                     values: [headers]
@@ -103,7 +111,7 @@ class GoogleSheetsService {
             
             const response = await this.sheets.spreadsheets.values.append({
                 spreadsheetId: this.spreadsheetId,
-                range: 'A2:J2',  // Updated to match new column count
+                range: 'A2:R2',  // Updated to match new column count
                 valueInputOption: 'RAW',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
