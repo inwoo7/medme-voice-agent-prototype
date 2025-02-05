@@ -24,19 +24,35 @@ sheetsService.init().catch(console.error);
 
 // Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
-    console.log('==================== WEBHOOK REQUEST START ====================');
+    console.log('\n==================== WEBHOOK REQUEST START ====================');
     console.log('Request URL:', req.url);
     console.log('Request Method:', req.method);
-    console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Request Body Preview:', util.inspect(req.body, { depth: 3, colors: true }));
+    console.log('Event Type:', req.body?.event || 'No event type');
+    console.log('Call ID:', req.body?.call?.call_id || 'No call ID');
+    
+    // Log the entire request for debugging
+    console.log('Full Request:', {
+        headers: req.headers,
+        body: req.body,
+        timestamp: new Date().toISOString()
+    });
 
     try {
         // Handle Retell call events
         if (req.body.event) {
-            console.log(`\nProcessing Retell ${req.body.event} event for call ${req.body.call?.call_id}`);
+            console.log(`Processing Retell ${req.body.event} event`);
             
             switch (req.body.event) {
+                case 'call_started':
+                    console.log('Call started:', req.body.call?.call_id);
+                    break;
+                    
+                case 'call_ended':
+                    console.log('Call ended:', req.body.call?.call_id);
+                    break;
+                    
                 case 'call_analyzed':
+                    console.log('Call analyzed:', req.body.call?.call_id);
                     const callData = req.body.call;
                     console.log('\nExtracting patient data...');
                     const patientData = extractPatientData(callData);
@@ -56,10 +72,10 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                     break;
                     
                 default:
-                    console.log(`Skipping ${req.body.event} event`);
+                    console.log(`Unknown event type: ${req.body.event}`);
             }
             
-            return res.json({ status: 'ok' });
+            return res.json({ status: 'ok', event: req.body.event });
         }
 
         // Handle our custom agent interactions
@@ -228,18 +244,25 @@ router.post('/test-webhook', async (req, res) => {
         transcript_object: [
             {
                 role: 'user',
-                content: 'I have a headache, about 8 out of 10 pain, for 2 days'
+                content: 'I have a severe headache in the back of my head, about 8 out of 10 pain, for 2 days'
             }
         ],
         call_analysis: {
-            call_summary: 'Test call',
-            user_sentiment: 'Neutral',
-            call_successful: true
+            call_summary: 'Patient reported severe headache',
+            user_sentiment: 'Negative',
+            call_successful: true,
+            custom_analysis_data: {
+                pain_level: 8,
+                duration_days: 2,
+                primary_symptom: 'headache'
+            },
+            agent_task_completion_rating: 'Complete'
         }
     };
 
     try {
         const patientData = extractPatientData(sampleCall);
+        console.log('Extracted patient data:', JSON.stringify(patientData, null, 2));
         await storePatientData(patientData);
         res.json({ 
             status: 'success', 
