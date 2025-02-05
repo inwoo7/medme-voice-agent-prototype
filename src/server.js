@@ -1,9 +1,19 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const webhookRoutes = require('./webhooks');
+const webhookRouter = require('./webhooks');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// Increase JSON payload limit to 50mb
+app.use(bodyParser.json({
+    limit: '50mb'
+}));
+
+// Increase URL-encoded payload limit as well
+app.use(bodyParser.urlencoded({
+    limit: '50mb',
+    extended: true
+}));
 
 // Add security headers
 app.use((req, res, next) => {
@@ -13,18 +23,17 @@ app.use((req, res, next) => {
     next();
 });
 
-// Middleware
-app.use(bodyParser.json());
-
 // Basic health check route
 app.get('/', (req, res) => {
     res.status(200).json({ status: 'healthy' });
 });
 
 // Routes
-app.use('/api', webhookRoutes);
+app.use('/webhooks', webhookRouter);
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-}); 
+const port = process.env.PORT || 10000;
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
+
+module.exports = app; 
