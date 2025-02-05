@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
+const PatientData = require('./models/PatientData');
 
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
@@ -86,12 +87,20 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                     break;
                     
                 case 'call_analyzed':
-                    // Handle call analysis
+                    const callData = req.body.call;
+                    const patientData = extractPatientData(callData);
+                    
                     console.log('Call Analysis:', {
-                        summary: req.body.call?.call_analysis?.call_summary,
-                        sentiment: req.body.call?.call_analysis?.user_sentiment,
-                        success: req.body.call?.call_analysis?.call_successful
+                        summary: callData?.call_analysis?.call_summary,
+                        sentiment: callData?.call_analysis?.user_sentiment,
+                        success: callData?.call_analysis?.call_successful,
+                        extractedData: patientData.toJSON()
                     });
+
+                    // Store the data (example using environment variable)
+                    if (process.env.ENABLE_DATA_STORAGE === 'true') {
+                        await storePatientData(patientData);
+                    }
                     break;
             }
             
@@ -137,10 +146,95 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
     } catch (error) {
         console.error('Webhook error:', error);
         res.status(500).json({
-            response: "I apologize, but I'm having trouble processing your request. Can you please try again?",
-            metadata: { error: error.message }
+            error: 'Internal server error',
+            details: error.message
         });
     }
 });
+
+function extractPatientData(callData) {
+    const patientData = new PatientData();
+    
+    // Extract call details
+    patientData.callDetails = {
+        callId: callData.call_id,
+        timestamp: callData.start_timestamp,
+        duration: callData.duration_ms
+    };
+
+    // Extract phone number
+    patientData.phoneNumber = callData.from_number;
+
+    // Parse transcript for information
+    const transcript = callData.transcript_object || [];
+    let currentSymptom = null;
+
+    for (const message of transcript) {
+        if (message.role === 'user') {
+            const text = message.content.toLowerCase();
+            
+            // Extract severity (e.g., "8 out of 10")
+            const severityMatch = text.match(/(\d+)(?:\s+)?(?:out\s+of|\/)\s*10/);
+            if (severityMatch && !patientData.symptoms.severity) {
+                patientData.symptoms.severity = parseInt(severityMatch[1]);
+            }
+
+            // Extract duration (e.g., "2 days")
+            const durationMatch = text.match(/(\d+)\s*(day|days|week|weeks|hour|hours)/);
+            if (durationMatch && !patientData.symptoms.duration) {
+                patientData.symptoms.duration = `${durationMatch[1]} ${durationMatch[2]}`;
+            }
+
+            // Extract symptoms
+            const symptomKeywords = ['headache', 'pain', 'nausea', 'dizzy', 'vomiting'];
+            for (const keyword of symptomKeywords) {
+                if (text.includes(keyword) && !patientData.symptoms.additionalSymptoms.includes(keyword)) {
+                    patientData.symptoms.additionalSymptoms.push(keyword);
+                }
+            }
+
+            // Extract location of pain
+            const locationKeywords = {
+                'back of head': 'posterior head',
+                'front of head': 'anterior head',
+                'side of head': 'lateral head'
+            };
+            for (const [keyword, medical] of Object.entries(locationKeywords)) {
+                if (text.includes(keyword)) {
+                    patientData.symptoms.location = medical;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Set primary condition based on most mentioned symptom
+    if (patientData.symptoms.additionalSymptoms.length > 0) {
+        patientData.symptoms.primaryCondition = patientData.symptoms.additionalSymptoms[0];
+    }
+
+    return patientData;
+}
+
+async function storePatientData(patientData) {
+    // This is a placeholder - implement your storage solution
+    // Could be MongoDB, PostgreSQL, or even just write to a file
+    console.log('Storing patient data:', patientData.toJSON());
+    
+    // Example: Store to a file
+    const fs = require('fs').promises;
+    const path = require('path');
+    
+    const dataDir = path.join(__dirname, '../data');
+    const filePath = path.join(dataDir, `${patientData.callDetails.callId}.json`);
+    
+    try {
+        await fs.mkdir(dataDir, { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(patientData.toJSON(), null, 2));
+        console.log(`Patient data stored at: ${filePath}`);
+    } catch (error) {
+        console.error('Error storing patient data:', error);
+    }
+}
 
 module.exports = router; 
