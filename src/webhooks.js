@@ -69,9 +69,36 @@ const verifyWebhook = (req, res, next) => {
     next();
 };
 
-// Basic webhook handler for agent interactions
+// Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
     try {
+        // Handle Retell call events
+        if (req.body.event) {
+            console.log(`Processing Retell ${req.body.event} event for call ${req.body.call?.call_id}`);
+            
+            switch (req.body.event) {
+                case 'call_started':
+                    // Handle call start
+                    break;
+                    
+                case 'call_ended':
+                    // Handle call end
+                    break;
+                    
+                case 'call_analyzed':
+                    // Handle call analysis
+                    console.log('Call Analysis:', {
+                        summary: req.body.call?.call_analysis?.call_summary,
+                        sentiment: req.body.call?.call_analysis?.user_sentiment,
+                        success: req.body.call?.call_analysis?.call_successful
+                    });
+                    break;
+            }
+            
+            return res.json({ status: 'ok' });
+        }
+
+        // Handle our custom agent interactions
         const { intent, user_input, call_id } = req.body;
         
         let response = {
