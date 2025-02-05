@@ -2,10 +2,10 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 
-// Re-enable webhook verification with detailed logging
+// Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
     const signature = req.headers['x-retell-signature'];
-    const timestamp = req.headers['x-retell-timestamp'];
+    let timestamp = req.headers['x-retell-timestamp'];
     
     console.log('Incoming request:', {
         body: req.body,
@@ -14,37 +14,77 @@ const verifyWebhook = (req, res, next) => {
         signature: signature
     });
     
-    if (!signature || !timestamp) {
-        console.log('Missing headers:', { signature, timestamp });
-        return res.status(401).json({ error: 'Missing signature headers' });
+    if (!signature) {
+        console.log('Missing signature');
+        return res.status(401).json({ error: 'Missing signature header' });
     }
 
-    const payload = JSON.stringify(req.body);
-    console.log('Payload for signature:', payload);
-    console.log('Timestamp + Payload:', timestamp + payload);
+    // Handle Retell's v= format
+    if (signature.startsWith('v=')) {
+        const parts = signature.split(',');
+        const vPart = parts[0];
+        const dPart = parts[1];
+        
+        if (!vPart || !dPart) {
+            console.log('Invalid signature format');
+            return res.status(401).json({ error: 'Invalid signature format' });
+        }
 
-    const expectedSignature = crypto
-        .createHmac('sha256', process.env.WEBHOOK_SECRET)
-        .update(timestamp + payload)
-        .digest('hex');
-    
-    console.log('Signature comparison:', {
-        expected: expectedSignature,
-        received: signature,
-        match: expectedSignature === signature
-    });
+        timestamp = vPart.split('=')[1];
+        const receivedSignature = dPart.split('=')[1];
 
-    if (signature !== expectedSignature) {
-        console.log('Invalid signature');
-        return res.status(401).json({ 
-            error: 'Invalid signature',
-            debug: {
-                expected: expectedSignature,
-                received: signature,
-                timestamp: timestamp,
-                payloadUsed: payload
-            }
+        const payload = JSON.stringify(req.body);
+        console.log('Payload for signature:', payload);
+        console.log('Timestamp + Payload:', timestamp + payload);
+
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.WEBHOOK_SECRET)
+            .update(timestamp + payload)
+            .digest('hex');
+        
+        console.log('Signature comparison:', {
+            expected: expectedSignature,
+            received: receivedSignature,
+            match: expectedSignature === receivedSignature
         });
+
+        if (expectedSignature !== receivedSignature) {
+            console.log('Invalid signature');
+            return res.status(401).json({ 
+                error: 'Invalid signature',
+                debug: {
+                    expected: expectedSignature,
+                    received: receivedSignature,
+                    timestamp: timestamp,
+                    payloadUsed: payload
+                }
+            });
+        }
+    } else {
+        // Handle direct signature format (for testing)
+        if (!timestamp) {
+            console.log('Missing timestamp');
+            return res.status(401).json({ error: 'Missing timestamp header' });
+        }
+
+        const payload = JSON.stringify(req.body);
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.WEBHOOK_SECRET)
+            .update(timestamp + payload)
+            .digest('hex');
+        
+        if (signature !== expectedSignature) {
+            console.log('Invalid direct signature');
+            return res.status(401).json({ 
+                error: 'Invalid signature',
+                debug: {
+                    expected: expectedSignature,
+                    received: signature,
+                    timestamp: timestamp,
+                    payloadUsed: payload
+                }
+            });
+        }
     }
 
     console.log('Webhook verified successfully');
