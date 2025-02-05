@@ -58,12 +58,18 @@ class GoogleSheetsService {
             'Timestamp',
             'Call ID',
             'Phone Number',
+            'Reason for Call',
+            'Minor Ailment',
             'Primary Condition',
             'Severity',
             'Duration',
             'Location',
             'Additional Symptoms',
-            'Medications',
+            'First Name',
+            'Last Name',
+            'Address',
+            'Email',
+            'City',
             'Sentiment',
             'Success',
             'Summary',
@@ -73,7 +79,7 @@ class GoogleSheetsService {
         try {
             await this.sheets.spreadsheets.values.update({
                 spreadsheetId: this.spreadsheetId,
-                range: 'A1:M1',
+                range: 'A1:S1',
                 valueInputOption: 'RAW',
                 resource: {
                     values: [headers]

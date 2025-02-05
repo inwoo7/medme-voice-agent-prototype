@@ -47,6 +47,16 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                 case 'call_analyzed':
                     console.log(`Processing analysis for call: ${callId}`);
                     const callData = req.body.call;
+                    
+                    // Log the raw call analysis data
+                    console.log('Raw call analysis:', JSON.stringify({
+                        summary: callData.call_analysis?.call_summary,
+                        sentiment: callData.call_analysis?.user_sentiment,
+                        successful: callData.call_analysis?.call_successful,
+                        customData: callData.call_analysis?.custom_analysis_data,
+                        transcript: callData.transcript_object?.slice(0, 2) // First two messages
+                    }, null, 2));
+                    
                     const patientData = extractPatientData(callData);
                     
                     // Log only the extracted data
@@ -113,75 +123,123 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
 });
 
 function extractPatientData(callData) {
-    console.log('Extracting data from:', {
-        hasCallAnalysis: Boolean(callData.call_analysis),
-        hasTranscript: Boolean(callData.transcript_object),
+    console.log('Processing call data:', {
+        hasAnalysis: Boolean(callData.call_analysis),
+        hasTranscript: Boolean(callData.transcript),
         callId: callData.call_id
     });
 
     const patientData = new PatientData();
     
-    // Extract call details
+    // Basic call details
     patientData.callDetails = {
         callId: callData.call_id,
         timestamp: callData.start_timestamp,
         duration: callData.duration_ms
     };
 
-    // Extract phone number
-    patientData.phoneNumber = callData.from_number;
-
-    // Extract analysis data first (this is important data)
+    // Extract from call analysis
     if (callData.call_analysis) {
         patientData.analysis = {
-            summary: callData.call_analysis.call_summary || '',
-            sentiment: callData.call_analysis.user_sentiment || 'Neutral',
-            successful: callData.call_analysis.call_successful || false,
-            customData: callData.call_analysis.custom_analysis_data || {},
-            taskCompletion: callData.call_analysis.agent_task_completion_rating || ''
+            summary: callData.call_analysis.call_summary,
+            sentiment: callData.call_analysis.user_sentiment,
+            successful: callData.call_analysis.call_successful,
+            customData: callData.call_analysis.custom_analysis_data || {}
         };
 
-        // Try to extract primary condition from custom data
-        if (callData.call_analysis.custom_analysis_data?.primary_symptom) {
-            patientData.symptoms.primaryCondition = callData.call_analysis.custom_analysis_data.primary_symptom;
+        // Extract custom analysis data
+        const customData = callData.call_analysis.custom_analysis_data || {};
+        
+        // Consultation details
+        patientData.consultation.reasonForCall = customData.reason_for_call;
+        patientData.consultation.minorAilment = customData.minor_ailment;
+
+        // Personal information
+        patientData.personalInfo = {
+            firstName: customData.first_name,
+            lastName: customData.last_name,
+            phoneNumber: callData.from_number, // From call data
+            email: customData.email,
+            address: customData.address,
+            city: customData.city
+        };
+
+        // If primary condition is in custom data, use it
+        if (customData.primary_condition) {
+            patientData.symptoms.primaryCondition = customData.primary_condition;
         }
     }
 
-    // Parse transcript for additional information
-    if (callData.transcript_object && Array.isArray(callData.transcript_object)) {
-        for (const message of callData.transcript_object) {
-            if (message.role === 'user') {
-                const text = message.content.toLowerCase();
-                
-                // Extract severity
-                const severityMatch = text.match(/(\d+)(?:\s+)?(?:out\s+of|\/)\s*10/);
-                if (severityMatch && !patientData.symptoms.severity) {
-                    patientData.symptoms.severity = parseInt(severityMatch[1]);
-                }
+    // Extract from transcript (Retell provides both string and object formats)
+    if (callData.transcript) {
+        // Process the full transcript string
+        const transcript = callData.transcript;
+        const userLines = transcript
+            .split('\n')
+            .filter(line => line.toLowerCase().startsWith('user:'))
+            .map(line => line.replace(/^user:\s*/i, '').toLowerCase());
 
-                // Extract duration
-                const durationMatch = text.match(/(\d+)\s*(day|days|week|weeks|hour|hours)/);
-                if (durationMatch && !patientData.symptoms.duration) {
-                    patientData.symptoms.duration = `${durationMatch[1]} ${durationMatch[2]}`;
-                }
+        console.log('Processing user lines:', userLines);
 
-                // Extract symptoms
-                const symptomKeywords = ['acne', 'headache', 'pain', 'nausea', 'dizzy', 'vomiting'];
-                for (const keyword of symptomKeywords) {
-                    if (text.includes(keyword) && !patientData.symptoms.additionalSymptoms.includes(keyword)) {
-                        patientData.symptoms.additionalSymptoms.push(keyword);
+        for (const line of userLines) {
+            // Extract severity (e.g., "8 out of 10")
+            const severityMatch = line.match(/(\d+)(?:\s+)?(?:out\s+of|\/)\s*10/);
+            if (severityMatch && !patientData.symptoms.severity) {
+                patientData.symptoms.severity = parseInt(severityMatch[1]);
+            }
+
+            // Extract duration (e.g., "3 months")
+            const durationMatch = line.match(/(\d+)\s*(day|days|week|weeks|month|months)/);
+            if (durationMatch && !patientData.symptoms.duration) {
+                patientData.symptoms.duration = `${durationMatch[1]} ${durationMatch[2]}`;
+            }
+
+            // Extract symptoms
+            const symptomKeywords = ['acne', 'headache', 'pain', 'nausea', 'dizzy', 'vomiting'];
+            for (const keyword of symptomKeywords) {
+                if (line.includes(keyword) && !patientData.symptoms.additionalSymptoms.includes(keyword)) {
+                    patientData.symptoms.additionalSymptoms.push(keyword);
+                    if (!patientData.symptoms.primaryCondition) {
+                        patientData.symptoms.primaryCondition = keyword;
                     }
+                }
+            }
+
+            // Extract location
+            const locationKeywords = {
+                'back of head': 'posterior head',
+                'front of head': 'anterior head',
+                'side of head': 'lateral head',
+                'face': 'facial',
+                'chest': 'chest',
+                'back': 'back'
+            };
+            for (const [keyword, medical] of Object.entries(locationKeywords)) {
+                if (line.includes(keyword)) {
+                    patientData.symptoms.location = medical;
+                    break;
                 }
             }
         }
     }
 
-    console.log('Extracted patient data:', {
+    console.log('Extracted data:', {
         callId: patientData.callDetails.callId,
-        condition: patientData.symptoms.primaryCondition,
-        severity: patientData.symptoms.severity,
-        duration: patientData.symptoms.duration,
-        symptoms: patientData.symptoms.additionalSymptoms,
+        personalInfo: {
+            name: `${patientData.personalInfo.firstName} ${patientData.personalInfo.lastName}`,
+            city: patientData.personalInfo.city
+        },
+        consultation: {
+            reason: patientData.consultation.reasonForCall,
+            ailment: patientData.consultation.minorAilment
+        },
+        symptoms: {
+            condition: patientData.symptoms.primaryCondition,
+            severity: patientData.symptoms.severity,
+            duration: patientData.symptoms.duration,
+            location: patientData.symptoms.location,
+            additional: patientData.symptoms.additionalSymptoms
+        },
         sentiment: patientData.analysis?.sentiment,
         success: patientData.analysis?.successful
     });
@@ -196,20 +254,25 @@ async function storePatientData(patientData) {
             timestamp: new Date(patientData.callDetails.timestamp).toISOString()
         });
 
-        // Ensure we have valid data before storing
         const dataToStore = [
             new Date(patientData.callDetails.timestamp).toISOString(),  // Timestamp
             patientData.callDetails.callId,                            // Call ID
-            patientData.phoneNumber || '',                             // Phone Number
+            patientData.personalInfo.phoneNumber || '',                // Phone Number
+            patientData.consultation.reasonForCall || '',              // Reason for Call
+            patientData.consultation.minorAilment || '',              // Minor Ailment
             patientData.symptoms.primaryCondition || '',               // Primary Condition
             patientData.symptoms.severity || '',                       // Severity
             patientData.symptoms.duration || '',                       // Duration
             patientData.symptoms.location || '',                       // Location
             patientData.symptoms.additionalSymptoms.join(', ') || '', // Additional Symptoms
-            '',                                                        // Medications (not implemented yet)
+            patientData.personalInfo.firstName || '',                  // First Name
+            patientData.personalInfo.lastName || '',                   // Last Name
+            patientData.personalInfo.address || '',                    // Address
+            patientData.personalInfo.email || '',                      // Email
+            patientData.personalInfo.city || '',                      // City
             patientData.analysis?.sentiment || '',                     // Sentiment
             patientData.analysis?.successful || '',                    // Success
-            patientData.analysis?.summary || '',                       // Summary
+            patientData.analysis?.summary || '',                      // Summary
             JSON.stringify(patientData.analysis?.customData || {})     // Custom Data
         ];
 
@@ -218,7 +281,7 @@ async function storePatientData(patientData) {
         console.log('Successfully stored data in Google Sheets');
     } catch (error) {
         console.error('Failed to store patient data:', error);
-        throw error;  // Re-throw to handle in the calling function
+        throw error;
     }
 }
 

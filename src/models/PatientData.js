@@ -1,11 +1,20 @@
 class PatientData {
     constructor() {
-        this.firstName = null;
-        this.lastName = null;
-        this.phoneNumber = null;
-        this.email = null;
-        this.address = null;
-        this.city = null;
+        this.callDetails = {
+            callId: null,
+            timestamp: null,
+            duration: null
+        };
+        
+        this.personalInfo = {
+            firstName: null,
+            lastName: null,
+            phoneNumber: null,
+            email: null,
+            address: null,
+            city: null
+        };
+        
         this.symptoms = {
             primaryCondition: null,
             severity: null,
@@ -14,25 +23,27 @@ class PatientData {
             additionalSymptoms: [],
             medicationsTaken: []
         };
-        this.callDetails = {
-            callId: null,
-            timestamp: null,
-            duration: null
+
+        this.consultation = {
+            reasonForCall: null,
+            minorAilment: null
+        };
+        
+        this.analysis = {
+            summary: null,
+            sentiment: null,
+            successful: null,
+            customData: {}
         };
     }
 
     toJSON() {
         return {
-            personalInfo: {
-                firstName: this.firstName,
-                lastName: this.lastName,
-                phoneNumber: this.phoneNumber,
-                email: this.email,
-                address: this.address,
-                city: this.city
-            },
+            callDetails: this.callDetails,
+            personalInfo: this.personalInfo,
             symptoms: this.symptoms,
-            callDetails: this.callDetails
+            consultation: this.consultation,
+            analysis: this.analysis
         };
     }
 }
