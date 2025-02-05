@@ -7,14 +7,9 @@ const util = require('util');
 
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
-    console.log('\n========== NEW WEBHOOK REQUEST ==========');
-    console.log('Time:', new Date().toISOString());
-    console.log('URL:', req.url);
-    console.log('Method:', req.method);
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    console.log('=======================================\n');
-    next(); // Allow all requests for now
+    // Only log minimal info for verification
+    console.log(`[${new Date().toISOString()}] Verifying webhook request: ${req.method} ${req.originalUrl}`);
+    next();
 };
 
 // At the top of the file
@@ -25,51 +20,51 @@ sheetsService.init().catch(console.error);
 
 // Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
-    console.log('\n========== WEBHOOK REQUEST RECEIVED ==========');
-    console.log('Time:', new Date().toISOString());
-    console.log('Path:', req.originalUrl);
-    console.log('Event:', req.body?.event);
-    console.log('Call ID:', req.body?.call?.call_id);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    console.log('============================================\n');
+    const event = req.body?.event;
+    const callId = req.body?.call?.call_id;
+    
+    console.log(`\n[${new Date().toISOString()}] Received ${event || 'unknown'} event for call ${callId || 'unknown'}`);
 
     try {
-        // Handle Retell call events
         if (req.body.event) {
-            console.log(`Processing Retell ${req.body.event} event`);
-            
             switch (req.body.event) {
                 case 'call_started':
-                    console.log('Call started:', req.body.call?.call_id);
+                    console.log(`Call started: ${callId}`);
                     break;
                     
                 case 'call_ended':
-                    console.log('Call ended:', req.body.call?.call_id);
+                    console.log(`Call ended: ${callId}`);
+                    // Log only relevant call details
+                    if (req.body.call) {
+                        console.log('Call Summary:', {
+                            duration: req.body.call.duration_ms,
+                            from: req.body.call.from_number,
+                            status: req.body.call.call_status
+                        });
+                    }
                     break;
                     
                 case 'call_analyzed':
-                    console.log('Call analyzed:', req.body.call?.call_id);
+                    console.log(`Processing analysis for call: ${callId}`);
                     const callData = req.body.call;
-                    console.log('\nExtracting patient data...');
                     const patientData = extractPatientData(callData);
-                    console.log('Extracted Data:', JSON.stringify(patientData.toJSON(), null, 2));
+                    
+                    // Log only the extracted data
+                    console.log('Extracted Data:', {
+                        primaryCondition: patientData.symptoms.primaryCondition,
+                        severity: patientData.symptoms.severity,
+                        duration: patientData.symptoms.duration,
+                        symptoms: patientData.symptoms.additionalSymptoms
+                    });
 
                     if (process.env.ENABLE_DATA_STORAGE === 'true') {
-                        console.log('\nAttempting to store data in Google Sheets...');
-                        try {
-                            await storePatientData(patientData);
-                            console.log('Successfully stored data in Google Sheets');
-                        } catch (error) {
-                            console.error('Failed to store data in Google Sheets:', error);
-                        }
-                    } else {
-                        console.log('Data storage is disabled (ENABLE_DATA_STORAGE != true)');
+                        await storePatientData(patientData);
+                        console.log('Data stored in Google Sheets');
                     }
                     break;
                     
                 default:
-                    console.log(`Unknown event type: ${req.body.event}`);
+                    console.log(`Unhandled event type: ${event}`);
             }
             
             return res.json({ status: 'ok', event: req.body.event });
@@ -112,18 +107,18 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
         console.log(`Processed intent: ${intent} for call ${call_id}`);
         res.json(response);
     } catch (error) {
-        console.error('Webhook Error:', error);
-        console.error('Stack:', error.stack);
-        res.status(500).json({
-            error: 'Internal server error',
-            details: error.message
-        });
-    } finally {
-        console.log('==================== WEBHOOK REQUEST END ====================\n');
+        console.error('Error processing webhook:', error.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 function extractPatientData(callData) {
+    console.log('Extracting data from:', {
+        hasCallAnalysis: Boolean(callData.call_analysis),
+        hasTranscript: Boolean(callData.transcript_object),
+        callId: callData.call_id
+    });
+
     const patientData = new PatientData();
     
     // Extract call details
@@ -136,74 +131,94 @@ function extractPatientData(callData) {
     // Extract phone number
     patientData.phoneNumber = callData.from_number;
 
-    // Parse transcript for information
-    const transcript = callData.transcript_object || [];
-    let currentSymptom = null;
+    // Extract analysis data first (this is important data)
+    if (callData.call_analysis) {
+        patientData.analysis = {
+            summary: callData.call_analysis.call_summary || '',
+            sentiment: callData.call_analysis.user_sentiment || 'Neutral',
+            successful: callData.call_analysis.call_successful || false,
+            customData: callData.call_analysis.custom_analysis_data || {},
+            taskCompletion: callData.call_analysis.agent_task_completion_rating || ''
+        };
 
-    for (const message of transcript) {
-        if (message.role === 'user') {
-            const text = message.content.toLowerCase();
-            
-            // Extract severity (e.g., "8 out of 10")
-            const severityMatch = text.match(/(\d+)(?:\s+)?(?:out\s+of|\/)\s*10/);
-            if (severityMatch && !patientData.symptoms.severity) {
-                patientData.symptoms.severity = parseInt(severityMatch[1]);
-            }
+        // Try to extract primary condition from custom data
+        if (callData.call_analysis.custom_analysis_data?.primary_symptom) {
+            patientData.symptoms.primaryCondition = callData.call_analysis.custom_analysis_data.primary_symptom;
+        }
+    }
 
-            // Extract duration (e.g., "2 days")
-            const durationMatch = text.match(/(\d+)\s*(day|days|week|weeks|hour|hours)/);
-            if (durationMatch && !patientData.symptoms.duration) {
-                patientData.symptoms.duration = `${durationMatch[1]} ${durationMatch[2]}`;
-            }
-
-            // Extract symptoms
-            const symptomKeywords = ['headache', 'pain', 'nausea', 'dizzy', 'vomiting'];
-            for (const keyword of symptomKeywords) {
-                if (text.includes(keyword) && !patientData.symptoms.additionalSymptoms.includes(keyword)) {
-                    patientData.symptoms.additionalSymptoms.push(keyword);
+    // Parse transcript for additional information
+    if (callData.transcript_object && Array.isArray(callData.transcript_object)) {
+        for (const message of callData.transcript_object) {
+            if (message.role === 'user') {
+                const text = message.content.toLowerCase();
+                
+                // Extract severity
+                const severityMatch = text.match(/(\d+)(?:\s+)?(?:out\s+of|\/)\s*10/);
+                if (severityMatch && !patientData.symptoms.severity) {
+                    patientData.symptoms.severity = parseInt(severityMatch[1]);
                 }
-            }
 
-            // Extract location of pain
-            const locationKeywords = {
-                'back of head': 'posterior head',
-                'front of head': 'anterior head',
-                'side of head': 'lateral head'
-            };
-            for (const [keyword, medical] of Object.entries(locationKeywords)) {
-                if (text.includes(keyword)) {
-                    patientData.symptoms.location = medical;
-                    break;
+                // Extract duration
+                const durationMatch = text.match(/(\d+)\s*(day|days|week|weeks|hour|hours)/);
+                if (durationMatch && !patientData.symptoms.duration) {
+                    patientData.symptoms.duration = `${durationMatch[1]} ${durationMatch[2]}`;
+                }
+
+                // Extract symptoms
+                const symptomKeywords = ['acne', 'headache', 'pain', 'nausea', 'dizzy', 'vomiting'];
+                for (const keyword of symptomKeywords) {
+                    if (text.includes(keyword) && !patientData.symptoms.additionalSymptoms.includes(keyword)) {
+                        patientData.symptoms.additionalSymptoms.push(keyword);
+                    }
                 }
             }
         }
     }
 
-    // Set primary condition based on most mentioned symptom
-    if (patientData.symptoms.additionalSymptoms.length > 0) {
-        patientData.symptoms.primaryCondition = patientData.symptoms.additionalSymptoms[0];
-    }
-
-    // Extract analysis data
-    if (callData.call_analysis) {
-        patientData.analysis = {
-            summary: callData.call_analysis.call_summary,
-            sentiment: callData.call_analysis.user_sentiment,
-            successful: callData.call_analysis.call_successful,
-            customData: callData.call_analysis.custom_analysis_data || {},
-            taskCompletion: callData.call_analysis.agent_task_completion_rating
-        };
-    }
+    console.log('Extracted patient data:', {
+        callId: patientData.callDetails.callId,
+        condition: patientData.symptoms.primaryCondition,
+        severity: patientData.symptoms.severity,
+        duration: patientData.symptoms.duration,
+        symptoms: patientData.symptoms.additionalSymptoms,
+        sentiment: patientData.analysis?.sentiment,
+        success: patientData.analysis?.successful
+    });
 
     return patientData;
 }
 
 async function storePatientData(patientData) {
     try {
-        await sheetsService.appendPatientData(patientData);
-        console.log('Patient data stored in Google Sheets');
+        console.log('Preparing to store data:', {
+            callId: patientData.callDetails.callId,
+            timestamp: new Date(patientData.callDetails.timestamp).toISOString()
+        });
+
+        // Ensure we have valid data before storing
+        const dataToStore = [
+            new Date(patientData.callDetails.timestamp).toISOString(),  // Timestamp
+            patientData.callDetails.callId,                            // Call ID
+            patientData.phoneNumber || '',                             // Phone Number
+            patientData.symptoms.primaryCondition || '',               // Primary Condition
+            patientData.symptoms.severity || '',                       // Severity
+            patientData.symptoms.duration || '',                       // Duration
+            patientData.symptoms.location || '',                       // Location
+            patientData.symptoms.additionalSymptoms.join(', ') || '', // Additional Symptoms
+            '',                                                        // Medications (not implemented yet)
+            patientData.analysis?.sentiment || '',                     // Sentiment
+            patientData.analysis?.successful || '',                    // Success
+            patientData.analysis?.summary || '',                       // Summary
+            JSON.stringify(patientData.analysis?.customData || {})     // Custom Data
+        ];
+
+        console.log('Storing row data:', dataToStore);
+        await sheetsService.appendPatientData(dataToStore);
+        console.log('Successfully stored data in Google Sheets');
     } catch (error) {
-        console.error('Error storing patient data:', error);
+        console.error('Failed to store patient data:', error);
+        throw error;  // Re-throw to handle in the calling function
     }
 }
 
