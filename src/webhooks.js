@@ -7,32 +7,12 @@ const util = require('util');
 
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
-    const signature = req.headers['x-retell-signature'];
-    let timestamp = req.headers['x-retell-timestamp'];
+    console.log('\n========== INCOMING WEBHOOK REQUEST ==========');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('===========================================\n');
     
-    console.log('Webhook verification started:', {
-        hasSignature: Boolean(signature),
-        timestamp: timestamp,
-        url: req.url,
-        method: req.method,
-        contentType: req.headers['content-type']
-    });
-
-    if (!signature) {
-        console.log('Missing signature, but allowing request in development');
-        next();
-        return;
-    }
-
-    // Handle Retell's v= format
-    if (signature.startsWith('v=')) {
-        console.log('Detected Retell signature format');
-        next();
-        return;
-    }
-
-    // For all other cases, allow the request
-    console.log('Allowing request with unknown signature format');
+    // Always allow the request for now
     next();
 };
 
@@ -233,6 +213,45 @@ router.get('/test-sheets', async (req, res) => {
     } catch (error) {
         console.error('Test failed:', error);
         res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
+// Add this route to manually test the full flow
+router.post('/test-webhook', async (req, res) => {
+    console.log('Testing webhook flow with sample data');
+    
+    const sampleCall = {
+        call_id: 'test_' + Date.now(),
+        start_timestamp: Date.now(),
+        duration_ms: 60000,
+        from_number: '+1234567890',
+        transcript_object: [
+            {
+                role: 'user',
+                content: 'I have a headache, about 8 out of 10 pain, for 2 days'
+            }
+        ],
+        call_analysis: {
+            call_summary: 'Test call',
+            user_sentiment: 'Neutral',
+            call_successful: true
+        }
+    };
+
+    try {
+        const patientData = extractPatientData(sampleCall);
+        await storePatientData(patientData);
+        res.json({ 
+            status: 'success', 
+            message: 'Test data processed and stored',
+            data: patientData 
+        });
+    } catch (error) {
+        console.error('Test failed:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: error.message 
+        });
     }
 });
 

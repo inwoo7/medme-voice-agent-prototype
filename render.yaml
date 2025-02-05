@@ -3,7 +3,9 @@ services:
     name: medme-voice-agent-prototype
     env: node
     buildCommand: npm install
-    startCommand: node src/server.js
+    startCommand: |
+      export ENABLE_DATA_STORAGE="true"
+      node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
