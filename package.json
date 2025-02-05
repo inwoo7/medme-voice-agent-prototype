@@ -15,7 +15,7 @@
   "dependencies": {
     "express": "^4.17.1",
     "body-parser": "^1.19.0",
-    "retell-sdk": "0.1.8",
+    "retell-sdk": "^3.4.0",
     "dotenv": "^10.0.0"
   },
   "devDependencies": {
