@@ -10,7 +10,7 @@ services:
       - key: PORT
         value: 10000
       - key: ENABLE_DATA_STORAGE
-        value: true
+        value: "true"
       - key: RETELL_API_KEY
         sync: false
       - key: WEBHOOK_SECRET

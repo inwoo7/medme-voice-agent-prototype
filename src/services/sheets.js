@@ -2,25 +2,53 @@ const { google } = require('googleapis');
 
 class GoogleSheetsService {
     constructor() {
-        // Will initialize with credentials from env
+        console.log('Initializing Google Sheets Service');
         this.sheets = null;
         this.spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+        console.log('Using spreadsheet ID:', this.spreadsheetId);
     }
 
     async init() {
         try {
+            console.log('Starting Google Sheets initialization...');
+            
+            if (!process.env.GOOGLE_SHEETS_CREDENTIALS) {
+                throw new Error('GOOGLE_SHEETS_CREDENTIALS environment variable is not set');
+            }
+
+            const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS);
+            console.log('Parsed credentials for service account:', credentials.client_email);
+
             const auth = new google.auth.GoogleAuth({
-                credentials: JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS),
+                credentials,
                 scopes: ['https://www.googleapis.com/auth/spreadsheets']
             });
 
             const client = await auth.getClient();
             this.sheets = google.sheets({ version: 'v4', auth: client });
             
+            console.log('Successfully initialized Google Sheets client');
+            
+            // Test the connection
+            await this.testConnection();
+            
             // Create headers if they don't exist
             await this.initializeHeaders();
         } catch (error) {
             console.error('Failed to initialize Google Sheets:', error);
+            throw error;
+        }
+    }
+
+    async testConnection() {
+        try {
+            console.log('Testing Google Sheets connection...');
+            const response = await this.sheets.spreadsheets.get({
+                spreadsheetId: this.spreadsheetId
+            });
+            console.log('Successfully connected to sheet:', response.data.properties.title);
+        } catch (error) {
+            console.error('Failed to connect to Google Sheets:', error);
             throw error;
         }
     }

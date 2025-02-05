@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const PatientData = require('./models/PatientData');
 const sheetsService = require('./services/sheets');
+const util = require('util');
 
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
@@ -79,44 +80,39 @@ sheetsService.init().catch(console.error);
 
 // Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
-    console.log('Received webhook request:', {
-        url: req.url,
-        method: req.method,
-        headers: req.headers,
-        body: req.body ? JSON.stringify(req.body).slice(0, 500) + '...' : null
-    });
+    console.log('==================== WEBHOOK REQUEST START ====================');
+    console.log('Request URL:', req.url);
+    console.log('Request Method:', req.method);
+    console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Request Body Preview:', util.inspect(req.body, { depth: 3, colors: true }));
 
     try {
         // Handle Retell call events
         if (req.body.event) {
-            console.log(`Processing Retell ${req.body.event} event for call ${req.body.call?.call_id}`);
+            console.log(`\nProcessing Retell ${req.body.event} event for call ${req.body.call?.call_id}`);
             
             switch (req.body.event) {
-                case 'call_started':
-                    // Handle call start
-                    break;
-                    
-                case 'call_ended':
-                    // Handle call end
-                    break;
-                    
                 case 'call_analyzed':
                     const callData = req.body.call;
+                    console.log('\nExtracting patient data...');
                     const patientData = extractPatientData(callData);
-                    
-                    console.log('Call Analysis:', {
-                        summary: callData?.call_analysis?.call_summary,
-                        sentiment: callData?.call_analysis?.user_sentiment,
-                        success: callData?.call_analysis?.call_successful,
-                        customData: callData?.call_analysis?.custom_analysis_data,
-                        extractedData: patientData.toJSON()
-                    });
+                    console.log('Extracted Data:', JSON.stringify(patientData.toJSON(), null, 2));
 
-                    // Store the data (example using environment variable)
                     if (process.env.ENABLE_DATA_STORAGE === 'true') {
-                        await storePatientData(patientData);
+                        console.log('\nAttempting to store data in Google Sheets...');
+                        try {
+                            await storePatientData(patientData);
+                            console.log('Successfully stored data in Google Sheets');
+                        } catch (error) {
+                            console.error('Failed to store data in Google Sheets:', error);
+                        }
+                    } else {
+                        console.log('Data storage is disabled (ENABLE_DATA_STORAGE != true)');
                     }
                     break;
+                    
+                default:
+                    console.log(`Skipping ${req.body.event} event`);
             }
             
             return res.json({ status: 'ok' });
@@ -159,14 +155,14 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
         console.log(`Processed intent: ${intent} for call ${call_id}`);
         res.json(response);
     } catch (error) {
-        console.error('Webhook error:', {
-            message: error.message,
-            stack: error.stack
-        });
+        console.error('Webhook Error:', error);
+        console.error('Stack:', error.stack);
         res.status(500).json({
             error: 'Internal server error',
             details: error.message
         });
+    } finally {
+        console.log('==================== WEBHOOK REQUEST END ====================\n');
     }
 });
 
