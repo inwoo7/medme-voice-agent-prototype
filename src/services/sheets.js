@@ -91,37 +91,28 @@ class GoogleSheetsService {
         }
     }
 
-    async appendPatientData(patientData) {
+    async appendPatientData(dataToStore) {
         try {
-            const row = [
-                new Date(patientData.callDetails.timestamp).toISOString(),
-                patientData.callDetails.callId,
-                patientData.phoneNumber,
-                patientData.symptoms.primaryCondition,
-                patientData.symptoms.severity,
-                patientData.symptoms.duration,
-                patientData.symptoms.location,
-                patientData.symptoms.additionalSymptoms.join(', '),
-                patientData.symptoms.medicationsTaken.join(', '),
-                patientData.analysis?.sentiment,
-                patientData.analysis?.successful,
-                patientData.analysis?.summary,
-                JSON.stringify(patientData.analysis?.customData)
-            ];
-
+            console.log('Attempting to append data to sheets:', dataToStore);
+            
             await this.sheets.spreadsheets.values.append({
                 spreadsheetId: this.spreadsheetId,
-                range: 'A2:M2',
+                range: 'A2:S2',  // Updated to match new column count
                 valueInputOption: 'RAW',
                 insertDataOption: 'INSERT_ROWS',
                 resource: {
-                    values: [row]
+                    values: [dataToStore]
                 }
             });
 
-            console.log('Patient data appended to Google Sheets');
+            console.log('Successfully appended data to Google Sheets');
         } catch (error) {
-            console.error('Failed to append patient data:', error);
+            console.error('Failed to append data:', error);
+            console.error('Error details:', {
+                message: error.message,
+                code: error.code,
+                status: error.status
+            });
             throw error;
         }
     }

@@ -5,6 +5,13 @@ const PatientData = require('./models/PatientData');
 const sheetsService = require('./services/sheets');
 const util = require('util');
 
+// Add at the top after requires
+console.log('Environment configuration:', {
+    ENABLE_DATA_STORAGE: process.env.ENABLE_DATA_STORAGE,
+    SHEETS_ID: process.env.GOOGLE_SHEETS_SPREADSHEET_ID ? 'configured' : 'missing',
+    NODE_ENV: process.env.NODE_ENV
+});
+
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
     // Only log minimal info for verification
@@ -48,28 +55,28 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                     console.log(`Processing analysis for call: ${callId}`);
                     const callData = req.body.call;
                     
-                    // Log the raw call analysis data
-                    console.log('Raw call analysis:', JSON.stringify({
-                        summary: callData.call_analysis?.call_summary,
-                        sentiment: callData.call_analysis?.user_sentiment,
-                        successful: callData.call_analysis?.call_successful,
+                    // Log the complete call analysis
+                    console.log('Complete call analysis:', {
+                        hasCallAnalysis: Boolean(callData.call_analysis),
+                        analysisFields: callData.call_analysis ? Object.keys(callData.call_analysis) : [],
                         customData: callData.call_analysis?.custom_analysis_data,
-                        transcript: callData.transcript_object?.slice(0, 2) // First two messages
-                    }, null, 2));
+                        summary: callData.call_analysis?.call_summary,
+                        sentiment: callData.call_analysis?.user_sentiment
+                    });
                     
                     const patientData = extractPatientData(callData);
                     
-                    // Log only the extracted data
-                    console.log('Extracted Data:', {
-                        primaryCondition: patientData.symptoms.primaryCondition,
-                        severity: patientData.symptoms.severity,
-                        duration: patientData.symptoms.duration,
-                        symptoms: patientData.symptoms.additionalSymptoms
-                    });
-
                     if (process.env.ENABLE_DATA_STORAGE === 'true') {
-                        await storePatientData(patientData);
-                        console.log('Data stored in Google Sheets');
+                        console.log('Attempting to store data...');
+                        try {
+                            await storePatientData(patientData);
+                            console.log('Successfully stored data in Google Sheets');
+                        } catch (error) {
+                            console.error('Failed to store data:', error);
+                            // Continue processing even if storage fails
+                        }
+                    } else {
+                        console.log('Data storage is disabled (ENABLE_DATA_STORAGE != true)');
                     }
                     break;
                     
