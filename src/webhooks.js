@@ -7,13 +7,14 @@ const util = require('util');
 
 // Re-enable webhook verification with support for both formats
 const verifyWebhook = (req, res, next) => {
-    console.log('\n========== INCOMING WEBHOOK REQUEST ==========');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    console.log('===========================================\n');
-    
-    // Always allow the request for now
-    next();
+    console.log('\n========== NEW WEBHOOK REQUEST ==========');
+    console.log('Time:', new Date().toISOString());
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('=======================================\n');
+    next(); // Allow all requests for now
 };
 
 // At the top of the file
@@ -276,6 +277,17 @@ router.post('/test-webhook', async (req, res) => {
             message: error.message 
         });
     }
+});
+
+// Add this near the top of the file, after the router definition
+router.post('/debug', (req, res) => {
+    console.log('Debug webhook received:', {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        headers: req.headers,
+        body: req.body
+    });
+    res.json({ status: 'received' });
 });
 
 module.exports = router; 

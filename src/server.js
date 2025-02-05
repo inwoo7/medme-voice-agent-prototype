@@ -63,6 +63,24 @@ app.get('/test-webhook', (req, res) => {
 // Routes
 app.use('/webhooks', webhookRouter);
 
+// Add after your routes
+app.use((err, req, res, next) => {
+    console.error('Global error handler caught:', {
+        error: err.message,
+        stack: err.stack,
+        url: req.url,
+        method: req.method,
+        headers: req.headers
+    });
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+});
+
+// Add request logging middleware at the top
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
 const port = process.env.PORT || 10000;
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
