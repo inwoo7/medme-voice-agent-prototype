@@ -61,6 +61,7 @@ app.get('/test-webhook', (req, res) => {
 });
 
 // Routes
+app.use('/api', webhookRouter);
 app.use('/webhooks', webhookRouter);
 
 // Add after your routes

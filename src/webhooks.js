@@ -25,18 +25,14 @@ sheetsService.init().catch(console.error);
 
 // Webhook handler for both agent interactions and Retell events
 router.post('/agent-webhook', verifyWebhook, async (req, res) => {
-    console.log('\n==================== WEBHOOK REQUEST START ====================');
-    console.log('Request URL:', req.url);
-    console.log('Request Method:', req.method);
-    console.log('Event Type:', req.body?.event || 'No event type');
-    console.log('Call ID:', req.body?.call?.call_id || 'No call ID');
-    
-    // Log the entire request for debugging
-    console.log('Full Request:', {
-        headers: req.headers,
-        body: req.body,
-        timestamp: new Date().toISOString()
-    });
+    console.log('\n========== WEBHOOK REQUEST RECEIVED ==========');
+    console.log('Time:', new Date().toISOString());
+    console.log('Path:', req.originalUrl);
+    console.log('Event:', req.body?.event);
+    console.log('Call ID:', req.body?.call?.call_id);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('============================================\n');
 
     try {
         // Handle Retell call events
