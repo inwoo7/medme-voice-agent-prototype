@@ -1,5 +1,4 @@
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-const { CloudWatchClient } = require('@aws-sdk/client-cloudwatch');
 
 class SMSService {
     constructor() {
@@ -109,28 +108,12 @@ Appointment Reference: ${data.callId}
     }
 
     async checkDeliveryStatus(messageId) {
-        try {
-            // Note: This requires CloudWatch logs integration
-            const cloudwatch = new CloudWatchClient({
-                region: process.env.AWS_REGION,
-                credentials: {
-                    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-                }
-            });
-
-            // Log the message ID for tracking
-            console.log('Checking delivery status for:', messageId);
-
-            return {
-                messageId,
-                status: 'sent', // Basic status since SNS doesn't provide detailed delivery status
-                timestamp: new Date().toISOString()
-            };
-        } catch (error) {
-            console.error('Failed to check message status:', error);
-            throw error;
-        }
+        // Simple status check without CloudWatch
+        return {
+            messageId,
+            status: 'sent',
+            timestamp: new Date().toISOString()
+        };
     }
 }
 
