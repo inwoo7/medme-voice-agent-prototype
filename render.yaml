@@ -17,4 +17,10 @@ services:
       - key: GOOGLE_SHEETS_CREDENTIALS
         sync: false
       - key: WEBHOOK_SECRET
-        sync: false 
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: "us-west-2"  # or your preferred region 

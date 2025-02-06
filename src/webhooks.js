@@ -4,6 +4,7 @@ const router = express.Router();
 const PatientData = require('./models/PatientData');
 const sheetsService = require('./services/sheets');
 const util = require('util');
+const smsService = require('./services/smsService');
 
 // Add at the top after requires
 console.log('Environment configuration:', {
@@ -66,16 +67,44 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                     
                     const patientData = extractPatientData(callData);
                     
-                    // Check if data storage is enabled (more lenient check)
                     if (process.env.ENABLE_DATA_STORAGE !== "false") {
-                        console.log('Attempting to store data...');
                         try {
                             await storePatientData(patientData);
+                            
+                            // Check if appointment was booked
+                            const customData = patientData.analysis.customData;
+                            if (customData['_appointment _booked'] === true) {
+                                console.log('Appointment booked, sending confirmation SMS...');
+                                
+                                try {
+                                    const messageData = {
+                                        name: customData['_first _name'] || 'Patient',
+                                        date: customData['_appointment date and time'],
+                                        location: 'Save-On-Foods Pharmacy, Willoughby', // Or from customData
+                                        pharmacyPhone: '604-555-1234' // Replace with actual pharmacy number
+                                    };
+
+                                    const message = smsService.generateAppointmentMessage(messageData);
+                                    
+                                    // Send SMS if phone number exists
+                                    if (customData['_phone']) {
+                                        await smsService.sendSMS(customData['_phone'], message);
+                                        console.log('Confirmation SMS sent successfully');
+                                    } else {
+                                        console.log('No phone number available for SMS confirmation');
+                                    }
+                                } catch (smsError) {
+                                    console.error('Failed to send confirmation SMS:', smsError);
+                                    // Continue processing even if SMS fails
+                                }
+                            } else {
+                                console.log('No appointment booked, skipping SMS confirmation');
+                            }
+                            
                             console.log('Successfully stored data in Google Sheets');
                         } catch (error) {
                             console.error('Failed to store data:', error.message);
                             console.error('Error stack:', error.stack);
-                            // Continue processing even if storage fails
                         }
                     } else {
                         console.log('Data storage is explicitly disabled');
@@ -376,6 +405,43 @@ router.post('/debug', (req, res) => {
         body: req.body
     });
     res.json({ status: 'received' });
+});
+
+// Make the test endpoint more robust
+router.get('/test-sms', async (req, res) => {
+    console.log('SMS test endpoint hit');
+    try {
+        const testMessage = {
+            name: 'Test Patient',
+            date: 'tomorrow at 2 PM',
+            location: 'Test Pharmacy',
+            pharmacyPhone: '604-555-1234'
+        };
+
+        const message = smsService.generateAppointmentMessage(testMessage);
+        
+        // Use your actual phone number here
+        const testPhone = '+17785127530';  // Your number
+        
+        console.log('Attempting to send SMS to:', testPhone);
+        console.log('Message:', message);
+        
+        const result = await smsService.sendSMS(testPhone, message);
+        console.log('SMS send result:', result);
+        
+        res.json({ 
+            status: 'success', 
+            message: 'Test SMS sent successfully',
+            details: result
+        });
+    } catch (error) {
+        console.error('SMS test failed:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: error.message,
+            stack: error.stack
+        });
+    }
 });
 
 module.exports = router; 

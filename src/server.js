@@ -60,8 +60,18 @@ app.get('/test-webhook', (req, res) => {
     });
 });
 
-// Routes
+// Add logging
+console.log('Setting up routes...');
+
+// Mount the webhook router at /api
 app.use('/api', webhookRouter);
+
+console.log('Routes configured:');
+console.log('- /api/agent-webhook');
+console.log('- /api/test-sms');
+console.log('- /api/test-sheets');
+
+// Routes
 app.use('/webhooks', webhookRouter);
 
 // Add after your routes
