@@ -257,6 +257,7 @@ async function storePatientData(patientData) {
     try {
         // Get the raw custom data
         const customData = patientData.analysis.customData;
+        console.log('Raw custom data for storage:', customData);
         
         const dataToStore = [
             new Date(patientData.callDetails.timestamp).toISOString(),  // Timestamp
@@ -269,17 +270,27 @@ async function storePatientData(patientData) {
             customData['_phone'] || '',                               // Phone
             customData['_email'] || '',                               // Email
             customData['_city'] || '',                                // City
-            customData['_postal_code'] || '',                         // Postal Code
-            customData['_date_of_birth'] || '',                       // Date of Birth
-            customData['_emergency_contact_name'] || '',              // Emergency Contact Name
-            customData['_emergency_contact_phone'] || '',             // Emergency Contact Phone
-            customData['_msp_number'] || '',                          // MSP Number
-            customData['_appointment_datetime'] || '',                // Appointment Date Time
+            customData['_postal _code'] || '',                        // Postal Code (fixed)
+            customData['_date of _birth'] || '',                      // Date of Birth (fixed)
+            customData['_emergency _contact _name'] || '',            // Emergency Contact Name (fixed)
+            customData['_emergency _contact _phone _number'] || '',   // Emergency Contact Phone (fixed)
+            customData['_health care card number (_m_s_p)'] || '',   // MSP Number (fixed)
+            customData['_appointment date and time'] || '',          // Appointment Date Time (fixed)
             customData['_consent'] || '',                            // Consent
-            customData['_appointment_booked'] || ''                   // Appointment Booked
+            customData['_appointment _booked'] || ''                 // Appointment Booked (fixed)
         ];
 
-        console.log('Storing custom data:', dataToStore);
+        console.log('Storing custom data with exact field names:', {
+            postalCode: customData['_postal _code'],
+            dob: customData['_date of _birth'],
+            emergencyName: customData['_emergency _contact _name'],
+            emergencyPhone: customData['_emergency _contact _phone _number'],
+            msp: customData['_health care card number (_m_s_p)'],
+            appointmentTime: customData['_appointment date and time'],
+            consent: customData['_consent'],
+            booked: customData['_appointment _booked']
+        });
+
         await sheetsService.appendPatientData(dataToStore);
         console.log('Successfully stored data in Google Sheets');
     } catch (error) {
