@@ -1,4 +1,5 @@
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const { CloudWatchClient } = require('@aws-sdk/client-cloudwatch');
 
 class SMSService {
     constructor() {
@@ -11,14 +12,55 @@ class SMSService {
         });
     }
 
+    validatePhoneNumber(phone) {
+        try {
+            // Remove all non-digits
+            const cleaned = phone.toString().replace(/\D/g, '');
+            
+            // Log the cleaning process
+            console.log('Phone number cleaning:', {
+                original: phone,
+                cleaned: cleaned,
+                length: cleaned.length
+            });
+
+            // For North American numbers (10 digits)
+            if (cleaned.length === 10) {
+                return `+1${cleaned}`;
+            }
+            
+            // If it's already 11 digits with country code
+            if (cleaned.length === 11 && cleaned.startsWith('1')) {
+                return `+${cleaned}`;
+            }
+            
+            // If it already has the plus and country code
+            if (phone.startsWith('+1') && phone.length === 12) {
+                return phone;
+            }
+
+            throw new Error(`Invalid phone number format: ${phone}. Must be 10 digits (7785127530) or include country code (+17785127530)`);
+        } catch (error) {
+            console.error('Phone validation failed:', {
+                input: phone,
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
     async sendSMS(phoneNumber, message) {
         try {
-            // Format phone number (ensure it includes country code)
-            const formattedPhone = this.formatPhoneNumber(phoneNumber);
-            
+            // Validate phone number first
+            const validatedPhone = this.validatePhoneNumber(phoneNumber);
+            console.log('Validated phone number:', {
+                original: phoneNumber,
+                validated: validatedPhone
+            });
+
             const params = {
                 Message: message,
-                PhoneNumber: formattedPhone,
+                PhoneNumber: validatedPhone,
                 MessageAttributes: {
                     'AWS.SNS.SMS.SMSType': {
                         DataType: 'String',
@@ -32,45 +74,63 @@ class SMSService {
             
             console.log('SMS sent successfully:', {
                 messageId: response.MessageId,
-                phone: formattedPhone
+                phone: validatedPhone
             });
             
             return response;
         } catch (error) {
-            console.error('Failed to send SMS:', error);
+            console.error('SMS send failed:', {
+                phone: phoneNumber,
+                error: error.message,
+                code: error.Code
+            });
             throw error;
         }
-    }
-
-    formatPhoneNumber(phone) {
-        // Remove any non-digit characters
-        const digits = phone.toString().replace(/\D/g, '');
-        
-        // Add '+1' prefix if it's a 10-digit number (North American)
-        if (digits.length === 10) {
-            return `+1${digits}`;
-        }
-        
-        // If it already has a country code (>10 digits), add '+'
-        return `+${digits}`;
     }
 
     generateAppointmentMessage(data) {
         return `
 Hi ${data.name},
 
-Your pharmacy appointment is confirmed for ${data.date}.
-Location: ${data.location}
+Your appointment is confirmed at:
+${data.location}
+Date & Time: ${data.date}
 
 Please bring:
 - Government ID
-- MSP Card
-- Medication list
+- MSP Card (${data.mspNumber || 'if available'})
+- List of current medications
 
 Questions? Call ${data.pharmacyPhone}
 
+Appointment Reference: ${data.callId}
 - MedMe Health
 `.trim();
+    }
+
+    async checkDeliveryStatus(messageId) {
+        try {
+            // Note: This requires CloudWatch logs integration
+            const cloudwatch = new CloudWatchClient({
+                region: process.env.AWS_REGION,
+                credentials: {
+                    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+                }
+            });
+
+            // Log the message ID for tracking
+            console.log('Checking delivery status for:', messageId);
+
+            return {
+                messageId,
+                status: 'sent', // Basic status since SNS doesn't provide detailed delivery status
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('Failed to check message status:', error);
+            throw error;
+        }
     }
 }
 

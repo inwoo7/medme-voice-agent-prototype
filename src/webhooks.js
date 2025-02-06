@@ -78,27 +78,35 @@ router.post('/agent-webhook', verifyWebhook, async (req, res) => {
                                 
                                 try {
                                     const messageData = {
-                                        name: customData['_first _name'] || 'Patient',
+                                        name: `${customData['_first _name']} ${customData['_last _name']}`.trim(),
                                         date: customData['_appointment date and time'],
-                                        location: 'Save-On-Foods Pharmacy, Willoughby', // Or from customData
-                                        pharmacyPhone: '604-555-1234' // Replace with actual pharmacy number
+                                        location: 'Save-On-Foods Pharmacy\n20151 Fraser Hwy\nLangley, BC V3A 4E4',
+                                        pharmacyPhone: '604-555-1234',
+                                        mspNumber: customData['_health care card number (_m_s_p)'],
+                                        callId: callId
                                     };
+
+                                    console.log('Preparing appointment confirmation:', {
+                                        patient: messageData.name,
+                                        appointment: messageData.date,
+                                        location: messageData.location
+                                    });
 
                                     const message = smsService.generateAppointmentMessage(messageData);
                                     
                                     // Send SMS if phone number exists
                                     if (customData['_phone']) {
                                         await smsService.sendSMS(customData['_phone'], message);
-                                        console.log('Confirmation SMS sent successfully');
+                                        console.log('Appointment confirmation SMS sent successfully');
                                     } else {
-                                        console.log('No phone number available for SMS confirmation');
+                                        console.log('No phone number available for appointment confirmation');
                                     }
                                 } catch (smsError) {
-                                    console.error('Failed to send confirmation SMS:', smsError);
+                                    console.error('Failed to send appointment confirmation:', smsError);
                                     // Continue processing even if SMS fails
                                 }
                             } else {
-                                console.log('No appointment booked, skipping SMS confirmation');
+                                console.log('No appointment booked, skipping confirmation SMS');
                             }
                             
                             console.log('Successfully stored data in Google Sheets');
@@ -420,26 +428,57 @@ router.get('/test-sms', async (req, res) => {
 
         const message = smsService.generateAppointmentMessage(testMessage);
         
-        // Use your actual phone number here
-        const testPhone = '+17785127530';  // Your number
+        // Use exact AWS SNS format
+        const testPhone = '7785127530';  // Base number
         
-        console.log('Attempting to send SMS to:', testPhone);
-        console.log('Message:', message);
+        console.log('Attempting to send SMS:', {
+            rawNumber: testPhone,
+            awsRegion: process.env.AWS_REGION
+        });
         
         const result = await smsService.sendSMS(testPhone, message);
-        console.log('SMS send result:', result);
+        
+        console.log('SMS send result:', {
+            messageId: result.MessageId,
+            destination: result.destination,
+            status: result.$metadata.httpStatusCode,
+            requestId: result.$metadata.requestId
+        });
         
         res.json({ 
             status: 'success', 
             message: 'Test SMS sent successfully',
-            details: result
+            details: {
+                sentTo: testPhone,
+                formattedNumber: `+1${testPhone}`,
+                messageId: result.MessageId,
+                previewText: message.substring(0, 50) + '...'
+            }
         });
     } catch (error) {
-        console.error('SMS test failed:', error);
+        console.error('SMS test failed:', {
+            error: error.message,
+            stack: error.stack,
+            awsError: error.Code
+        });
         res.status(500).json({ 
             status: 'error', 
             message: error.message,
+            awsError: error.Code,
             stack: error.stack
+        });
+    }
+});
+
+router.get('/test-sms-status/:messageId', async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const status = await smsService.checkDeliveryStatus(messageId);
+        res.json(status);
+    } catch (error) {
+        res.status(500).json({
+            error: 'Failed to check message status',
+            details: error.message
         });
     }
 });
